@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cardano Transfer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      .container {
+        border: 1px solid #ddd;
+        padding: 20px;
+        border-radius: 8px;
+      }
+      button {
+        background: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #45a049;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        box-sizing: border-box;
+      }
+      .status {
+        margin-top: 20px;
+        padding: 10px;
+        background: #f0f0f0;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Cardano tADA Transfer</h1>
+
+      <div id="wallet-section">
+        <button onclick="connectWallet()">Connect Lace Wallet</button>
+        <div id="wallet-info"></div>
+      </div>
+
+      <div id="transfer-section" style="display: none">
+        <h3>Send tADA</h3>
+        <input
+          type="text"
+          id="recipient"
+          placeholder="Recipient Address (addr_test1...)"
+        />
+        <input
+          type="number"
+          id="amount"
+          placeholder="Amount in tADA (e.g., 10)"
+          step="0.000001"
+        />
+        <button onclick="sendTransaction()">Send Transaction</button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <script src="client.js"></script>
+    <script>
+      const client = new CardanoClient();
+      let walletConnected = false;
+
+      async function connectWallet() {
+        try {
+          updateStatus("Connecting to Lace wallet...");
+          const result = await client.connectWallet();
+
+          walletConnected = true;
+          document.getElementById("wallet-info").innerHTML = `
+                    <p><strong>Connected!</strong></p>
+                    <p><small>${result.address}</small></p>
+                `;
+
+          document.getElementById("transfer-section").style.display = "block";
+
+          // Get and display balance
+          const balance = await client.getBalance();
+          updateStatus(`Balance: ${balance.balance.ada} tADA`);
+        } catch (error) {
+          updateStatus("Error: " + error.message);
+        }
+      }
+
+      async function sendTransaction() {
+        try {
+          const recipient = document.getElementById("recipient").value;
+          const amount = document.getElementById("amount").value;
+
+          if (!recipient || !amount) {
+            updateStatus("Please fill in all fields");
+            return;
+          }
+
+          updateStatus("Building transaction...");
+          const result = await client.transferAda(recipient, amount);
+
+          updateStatus(`
+                    ✅ Transaction submitted successfully!<br>
+                    TxHash: ${result.txHash}<br>
+                    Fee: ${(result.fee / 1000000).toFixed(6)} tADA<br>
+                    <a href="https://preprod.cardanoscan.io/transaction/${
+                      result.txHash
+                    }" target="_blank">View on Explorer</a>
+                `);
+        } catch (error) {
+          updateStatus("Error: " + error.message);
+        }
+      }
+
+      function updateStatus(message) {
+        document.getElementById("status").innerHTML = message;
+      }
+    </script>
+  </body>
+</html>
