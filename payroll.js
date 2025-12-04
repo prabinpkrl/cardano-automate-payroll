@@ -5,29 +5,26 @@ const CardanoWasm = require("@emurgo/cardano-serialization-lib-nodejs");
 const Cardano = CardanoWasm.default || CardanoWasm;
 require("dotenv").config();
 
-// Load sender wallet
 const senderWalletData = JSON.parse(fs.readFileSync("./senderWallet.json"));
 const senderAddress = senderWalletData.address;
 const paymentKey = Cardano.PrivateKey.from_normal_bytes(
   Buffer.from(senderWalletData.privateKeyHex, "hex")
 );
 
-// Blockfrost setup
 const API = new Blockfrost.BlockFrostAPI({
   projectId: process.env.BLOCKFROST_PROJECT_ID,
   network: "preprod",
 });
 
-// Batch payroll function
 async function runPayroll(payrollList) {
   try {
     console.log("🚀 Running payroll...");
 
-    // Fetch UTXOs
     const utxos = await API.addressesUtxos(senderAddress);
-    if (!utxos.length) return console.log("❌ No UTXOs found.");
+    if (!utxos.length) {
+      throw new Error("No UTXOs found");
+    }
 
-    // Protocol params
     const protocolParams = await API.epochsLatestParameters();
     const txConfig = Cardano.TransactionBuilderConfigBuilder.new()
       .fee_algo(
@@ -50,8 +47,6 @@ async function runPayroll(payrollList) {
       .build();
 
     const txBuilder = Cardano.TransactionBuilder.new(txConfig);
-
-    // Add inputs
     const txUnspentOutputs = Cardano.TransactionUnspentOutputs.new();
     for (const utxo of utxos) {
       const input = Cardano.TransactionInput.new(
@@ -68,7 +63,6 @@ async function runPayroll(payrollList) {
     }
     txBuilder.add_inputs_from(txUnspentOutputs, 2);
 
-    // Add **all payroll outputs**
     for (const { address, amount } of payrollList) {
       txBuilder.add_output(
         Cardano.TransactionOutput.new(
@@ -78,12 +72,10 @@ async function runPayroll(payrollList) {
       );
     }
 
-    // TTL & change
     const latestBlock = await API.blocksLatest();
     txBuilder.set_ttl(latestBlock.slot + 1000);
     txBuilder.add_change_if_needed(Cardano.Address.from_bech32(senderAddress));
 
-    // Build transaction
     const txBody = txBuilder.build();
     const txBodyBytes = txBody.to_bytes();
 
@@ -93,7 +85,6 @@ async function runPayroll(payrollList) {
       new Uint8Array(hasher.digest())
     );
 
-    // Sign
     const witness = Cardano.make_vkey_witness(txId, paymentKey);
     const witnessSet = Cardano.TransactionWitnessSet.new();
     const vkeys = Cardano.Vkeywitnesses.new();
@@ -101,15 +92,16 @@ async function runPayroll(payrollList) {
     witnessSet.set_vkeys(vkeys);
 
     const signedTx = Cardano.Transaction.new(txBody, witnessSet);
-
-    // Submit
     const txHex = Buffer.from(signedTx.to_bytes()).toString("hex");
     const txHash = await API.txSubmit(txHex);
 
     console.log("✅ Payroll submitted!");
     console.log("🔗 TX:", txHash);
+
+    return txHash;
   } catch (err) {
     console.error("❌ Error running payroll:", err);
+    throw err;
   }
 }
 

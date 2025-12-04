@@ -1,9 +1,22 @@
-const cron = require("node-cron");
-const { startPayroll } = require("./runpayroll");
+const http = require("http");
+const app = require("./api");
+const { initDb } = require("./database/db");
 
-// Every 2 minutes (for testing)
-cron.schedule("*/2 * * * *", () => {
-  startPayroll();
-});
+const PORT = process.env.PORT || 3000;
 
-console.log("📅 Scheduler started. Waiting for next payroll run...");
+async function bootstrap() {
+  try {
+    await initDb();
+
+    const server = http.createServer(app);
+    server.listen(PORT, () => {
+      console.log(`🌐 Server running on http://localhost:${PORT}`);
+      console.log("⏱️ Scheduler starts after clicking 'Start Payroll' in UI");
+    });
+  } catch (err) {
+    console.error("Failed to bootstrap application:", err);
+    process.exit(1);
+  }
+}
+
+bootstrap();

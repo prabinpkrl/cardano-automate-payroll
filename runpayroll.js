@@ -1,20 +1,31 @@
 const { runPayroll } = require("./payroll");
+const { getActiveRecipients, saveTransactionHash } = require("./database/db");
 
-// Example payroll list
-const payrollList = [
-  {
-    address:
-      "addr_test1qzgk7wvlzhznk4knyyq0tp3nj0ee82hc5maz2d2uqr4xtplyxuq6n9etd9ajlplj8ufr2jcgklgrmleajdh6zcnj8k5s9r40ue",
-    amount: 1_500_000n,
-  },
-  {
-    address:
-      "addr_test1qrfqjrzyxsjf8uszfdewzql7w2aa8k5ww63ppks50qfge4ffm0hx6rrrnhsqyxxs6e6sceqzxzfgaq5j9pfqrdz7wm3qj5w797",
-    amount: 2_000_000n,
-  },
-];
 async function startPayroll() {
-  await runPayroll(payrollList);
+  const recipients = await getActiveRecipients();
+
+  if (!recipients.length) {
+    console.log("⚠️ No active payroll recipients found in database.");
+    return null;
+  }
+
+  const payrollList = recipients.map((r) => ({
+    address: r.address,
+    amount: BigInt(r.amount),
+  }));
+
+  const txHash = await runPayroll(payrollList);
+
+  if (txHash) {
+    try {
+      await saveTransactionHash(txHash);
+      console.log(`💾 Transaction hash saved to database: ${txHash}`);
+    } catch (err) {
+      console.error("Error saving transaction hash:", err);
+    }
+  }
+  
+  return txHash;
 }
 
 module.exports = { startPayroll };
