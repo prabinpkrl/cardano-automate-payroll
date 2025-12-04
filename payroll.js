@@ -1,98 +1,116 @@
+const fs = require("fs");
 const Blockfrost = require("@blockfrost/blockfrost-js");
-const Cardano = require("@emurgo/cardano-serialization-lib-nodejs");
-const { generateSenderWallet } = require("./generate-senderaddress");
+const blake = require("blake2b");
+const CardanoWasm = require("@emurgo/cardano-serialization-lib-nodejs");
+const Cardano = CardanoWasm.default || CardanoWasm;
+require("dotenv").config();
 
-// // --- Blockfrost API ---
-// const API = new Blockfrost.BlockFrostAPI({
-//   projectId: "preprod0Gf54DbZz2XRrKOkAwLkRCkERyPNZSr5", // preprod project id
-//   network: "preprod",
-// });
+// Load sender wallet
+const senderWalletData = JSON.parse(fs.readFileSync("./senderWallet.json"));
+const senderAddress = senderWalletData.address;
+const paymentKey = Cardano.PrivateKey.from_normal_bytes(
+  Buffer.from(senderWalletData.privateKeyHex, "hex")
+);
 
-// // --- Sender key (generated with cardano-serialization-lib) ---
-// const rootKey = Cardano.Bip32PrivateKey.generate_ed25519_bip32();
-// const paymentKey = rootKey.derive(0).derive(0).to_raw_key();
-// const paymentKeyHash = paymentKey.to_public().hash();
-// const senderAddress = Cardano.BaseAddress.new(
-//   0, // network id 0 = testnet preprod
-//   Cardano.Credential.from_keyhash(paymentKeyHash),
-//   Cardano.Credential.from_keyhash(paymentKeyHash) // using same key for staking
-// )
-//   .to_address()
-//   .to_bech32();
+// Blockfrost setup
+const API = new Blockfrost.BlockFrostAPI({
+  projectId: process.env.BLOCKFROST_PROJECT_ID,
+  network: "preprod",
+});
 
-const senderAddress = generateSenderWallet().address;
+// Batch payroll function
+async function runPayroll(payrollList) {
+  try {
+    console.log("🚀 Running payroll...");
 
-// --- Receiver (Lace wallet) ---
-const receiverAddress =
-  "addr_test1qqyzgzrwv3vp5hlqjajrqj06pqsmacd3huw68ku8kdqs7ylyxuq6n9etd9ajlplj8ufr2jcgklgrmleajdh6zcnj8k5sxr5gtp"; // copy from Lace wallet
+    // Fetch UTXOs
+    const utxos = await API.addressesUtxos(senderAddress);
+    if (!utxos.length) return console.log("❌ No UTXOs found.");
 
-// --- Amount to send ---
-const amountToSend = 2000000n; // in lovelace (1 TADA = 1_000_000 lovelace)
-
-// Function to transfer ADA
-async function sendAda() {
-  // 1️⃣ Get UTXOs from sender
-  const utxos = await API.addressesUtxos(senderAddress);
-
-  // 2️⃣ Build transaction
-  const txBuilder = Cardano.TransactionBuilder.new(
-    Cardano.TransactionBuilderConfigBuilder.new()
+    // Protocol params
+    const protocolParams = await API.epochsLatestParameters();
+    const txConfig = Cardano.TransactionBuilderConfigBuilder.new()
       .fee_algo(
         Cardano.LinearFee.new(
-          Cardano.BigNum.from_str("44"),
-          Cardano.BigNum.from_str("155381")
+          Cardano.BigNum.from_str(protocolParams.min_fee_a.toString()),
+          Cardano.BigNum.from_str(protocolParams.min_fee_b.toString())
         )
       )
-      .coins_per_utxo_word(Cardano.BigNum.from_str("34482"))
-      .pool_deposit(Cardano.BigNum.from_str("500000000"))
-      .key_deposit(Cardano.BigNum.from_str("2000000"))
-      .max_value_size(5000)
-      .max_tx_size(16384)
-      .build()
-  );
+      .pool_deposit(
+        Cardano.BigNum.from_str(protocolParams.pool_deposit.toString())
+      )
+      .key_deposit(
+        Cardano.BigNum.from_str(protocolParams.key_deposit.toString())
+      )
+      .max_tx_size(protocolParams.max_tx_size)
+      .max_value_size(protocolParams.max_val_size)
+      .coins_per_utxo_byte(
+        Cardano.BigNum.from_str(protocolParams.coins_per_utxo_size.toString())
+      )
+      .build();
 
-  // Add inputs (all UTXOs)
-  for (const utxo of utxos) {
-    const input = Cardano.TransactionInput.new(
-      Cardano.TransactionHash.from_bytes(Buffer.from(utxo.tx_hash, "hex")),
-      utxo.output_index
+    const txBuilder = Cardano.TransactionBuilder.new(txConfig);
+
+    // Add inputs
+    const txUnspentOutputs = Cardano.TransactionUnspentOutputs.new();
+    for (const utxo of utxos) {
+      const input = Cardano.TransactionInput.new(
+        Cardano.TransactionHash.from_bytes(Buffer.from(utxo.tx_hash, "hex")),
+        utxo.output_index
+      );
+      const output = Cardano.TransactionOutput.new(
+        Cardano.Address.from_bech32(senderAddress),
+        Cardano.Value.new(
+          Cardano.BigNum.from_str(utxo.amount[0].quantity.toString())
+        )
+      );
+      txUnspentOutputs.add(Cardano.TransactionUnspentOutput.new(input, output));
+    }
+    txBuilder.add_inputs_from(txUnspentOutputs, 2);
+
+    // Add **all payroll outputs**
+    for (const { address, amount } of payrollList) {
+      txBuilder.add_output(
+        Cardano.TransactionOutput.new(
+          Cardano.Address.from_bech32(address),
+          Cardano.Value.new(Cardano.BigNum.from_str(amount.toString()))
+        )
+      );
+    }
+
+    // TTL & change
+    const latestBlock = await API.blocksLatest();
+    txBuilder.set_ttl(latestBlock.slot + 1000);
+    txBuilder.add_change_if_needed(Cardano.Address.from_bech32(senderAddress));
+
+    // Build transaction
+    const txBody = txBuilder.build();
+    const txBodyBytes = txBody.to_bytes();
+
+    const hasher = blake(32);
+    hasher.update(Buffer.from(txBodyBytes));
+    const txId = Cardano.TransactionHash.from_bytes(
+      new Uint8Array(hasher.digest())
     );
-    const output = Cardano.TransactionOutput.new(
-      Cardano.Address.from_bech32(receiverAddress),
-      Cardano.Value.new(Cardano.BigNum.from_str(amountToSend.toString()))
-    );
-    txBuilder.add_input(
-      senderAddress,
-      input,
-      Cardano.Value.new(Cardano.BigNum.from_str(utxo.amount[0].quantity))
-    );
-    txBuilder.add_output(output);
+
+    // Sign
+    const witness = Cardano.make_vkey_witness(txId, paymentKey);
+    const witnessSet = Cardano.TransactionWitnessSet.new();
+    const vkeys = Cardano.Vkeywitnesses.new();
+    vkeys.add(witness);
+    witnessSet.set_vkeys(vkeys);
+
+    const signedTx = Cardano.Transaction.new(txBody, witnessSet);
+
+    // Submit
+    const txHex = Buffer.from(signedTx.to_bytes()).toString("hex");
+    const txHash = await API.txSubmit(txHex);
+
+    console.log("✅ Payroll submitted!");
+    console.log("🔗 TX:", txHash);
+  } catch (err) {
+    console.error("❌ Error running payroll:", err);
   }
-
-  // 3️⃣ Set TTL (time to live)
-  const latestBlock = await API.blocksLatest();
-  txBuilder.set_ttl(latestBlock.slot + 1000);
-
-  // 4️⃣ Calculate fee & add change back to sender
-  txBuilder.add_change_if_needed(Cardano.Address.from_bech32(senderAddress));
-
-  // 5️⃣ Build & sign transaction
-  const txBody = txBuilder.build();
-  const tx = Cardano.Transaction.new(
-    txBody,
-    Cardano.TransactionWitnessSet.new()
-  );
-  const vkeyWitnesses = Cardano.Vkeywitnesses.new();
-  const vkeyWitness = Cardano.make_vkey_witness(txBody.hash(), paymentKey);
-  vkeyWitnesses.add(vkeyWitness);
-  const txWitnessSet = Cardano.TransactionWitnessSet.new();
-  txWitnessSet.set_vkeys(vkeyWitnesses);
-  const signedTx = Cardano.Transaction.new(txBody, txWitnessSet);
-
-  // 6️⃣ Submit transaction
-  const txHex = Buffer.from(signedTx.to_bytes()).toString("hex");
-  const txHash = await API.txSubmit(txHex);
-  console.log("Transaction submitted:", txHash);
 }
 
-sendAda().catch(console.error);
+module.exports = { runPayroll };

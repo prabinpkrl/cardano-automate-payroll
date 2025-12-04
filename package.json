@@ -13,8 +13,10 @@
   "dependencies": {
     "@blockfrost/blockfrost-js": "^6.0.0",
     "@emurgo/cardano-serialization-lib-nodejs": "^15.0.3",
+    "blake2b": "^2.1.4",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "node-cron": "^4.2.1"
   }
 }
