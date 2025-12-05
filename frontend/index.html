@@ -150,8 +150,7 @@
         <h2 style="margin-top: 0; border: none">Payroll Scheduler</h2>
         <button id="run-payroll-btn">Start Payroll</button>
         <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9em">
-          Starts automated payroll every 2 minutes (configurable via
-          PAYROLL_INTERVAL_MS)
+          Starts automated payroll every 2 minutes
         </p>
       </div>
 
@@ -205,7 +204,6 @@
       </div>
     </div>
 
-    <!-- <script src="payroll-client.js"></script> -->
     <script type="module">
       import {
         getRecipients,
@@ -333,9 +331,12 @@
           try {
             updateStatus("Starting scheduler... First run in ~2 minutes.");
             const result = await runPayroll();
-            updateStatus(`✅ Scheduler started. Waiting for transactions...`);
-            let lastSeenCount = 0;
-            const pollIntervalMs = 5000;
+            const newTxHash = result.txHash;
+            updateStatus(`Scheduler started. Waiting for transactions...`);
+
+            const initialTransactions = await getTransactions();
+            let lastSeenCount = initialTransactions.length;
+            const pollIntervalMs = 6000;
 
             const poll = async () => {
               try {
@@ -345,7 +346,7 @@
                   await loadTransactions();
                   const latestTx = transactions[0];
                   updateStatus(
-                    `✅ Transaction completed!<br>` +
+                    `Transaction completed!<br>` +
                       `<a href="https://preprod.cardanoscan.io/transaction/${latestTx.tx_hash}" target="_blank">View on Explorer</a>`
                   );
                 }

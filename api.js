@@ -54,7 +54,6 @@ app.post("/api/recipients", async (req, res) => {
     const recipient = await createRecipient({
       address,
       amount: Math.trunc(numericAmount * 1_000_000),
-      active: active !== undefined ? !!active : true,
     });
     res.status(201).json(recipient);
   } catch (err) {
@@ -69,7 +68,7 @@ app.put("/api/recipients/:id", async (req, res) => {
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ error: "Invalid id" });
     }
-    const { address, amount, active } = req.body;
+    const { address, amount } = req.body;
 
     let fields = {};
     if (address !== undefined) fields.address = address;
@@ -82,7 +81,6 @@ app.put("/api/recipients/:id", async (req, res) => {
       }
       fields.amount = Math.trunc(numericAmount * 1_000_000);
     }
-    if (active !== undefined) fields.active = !!active;
 
     const updated = await updateRecipient(id, fields);
     if (!updated) {
@@ -112,7 +110,7 @@ app.post("/api/run-payroll", async (req, res) => {
 
       schedulerTimer = setTimeout(runAndReschedule, PAYROLL_INTERVAL_MS);
       console.log(
-        `📅 Scheduler started (every ${
+        `Scheduler started (every ${
           PAYROLL_INTERVAL_MS / 60000
         } minutes). First run after one interval.`
       );

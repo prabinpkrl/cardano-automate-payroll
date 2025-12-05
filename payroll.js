@@ -95,12 +95,12 @@ async function runPayroll(payrollList) {
     const txHex = Buffer.from(signedTx.to_bytes()).toString("hex");
     const txHash = await API.txSubmit(txHex);
 
-    console.log("✅ Payroll submitted!");
-    console.log("🔗 TX:", txHash);
+    console.log("Payroll submitted!");
+    console.log("TX:", txHash);
 
     return txHash;
   } catch (err) {
-    console.error("❌ Error running payroll:", err);
+    console.error("Error running payroll:", err);
     throw err;
   }
 }

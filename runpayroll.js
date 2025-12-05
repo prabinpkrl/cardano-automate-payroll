@@ -5,7 +5,7 @@ async function startPayroll() {
   const recipients = await getActiveRecipients();
 
   if (!recipients.length) {
-    console.log("⚠️ No active payroll recipients found in database.");
+    console.log("No active payroll recipients found in database.");
     return null;
   }
 
@@ -19,12 +19,12 @@ async function startPayroll() {
   if (txHash) {
     try {
       await saveTransactionHash(txHash);
-      console.log(`💾 Transaction hash saved to database: ${txHash}`);
+      console.log(`Transaction hash saved to database: ${txHash}`);
     } catch (err) {
       console.error("Error saving transaction hash:", err);
     }
   }
-  
+
   return txHash;
 }
 

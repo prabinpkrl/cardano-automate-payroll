@@ -1,4 +1,4 @@
-const BASE_URL = ""; // put your backend URL if needed
+const BASE_URL = "";
 
 async function request(path, options = {}) {
   const res = await fetch(BASE_URL + path, {
