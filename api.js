@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 let schedulerStarted = false;
-let schedulerTimer = null;
+
 const PAYROLL_INTERVAL_MS =
   Number(process.env.PAYROLL_INTERVAL_MS) || 2 * 60 * 1000;
 
@@ -46,7 +46,9 @@ app.post("/api/recipients", async (req, res) => {
 
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      return res.status(400).json({ error: "amount must be a positive number" });
+      return res
+        .status(400)
+        .json({ error: "amount must be a positive number" });
     }
 
     const recipient = await createRecipient({
@@ -110,7 +112,9 @@ app.post("/api/run-payroll", async (req, res) => {
 
       schedulerTimer = setTimeout(runAndReschedule, PAYROLL_INTERVAL_MS);
       console.log(
-        `📅 Scheduler started (every ${PAYROLL_INTERVAL_MS / 60000} minutes). First run after one interval.`
+        `📅 Scheduler started (every ${
+          PAYROLL_INTERVAL_MS / 60000
+        } minutes). First run after one interval.`
       );
     }
 
@@ -150,5 +154,3 @@ app.delete("/api/recipients/:id", async (req, res) => {
 });
 
 module.exports = app;
-
-

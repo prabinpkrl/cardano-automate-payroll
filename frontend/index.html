@@ -9,7 +9,8 @@
         box-sizing: border-box;
       }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+          sans-serif;
         max-width: 900px;
         margin: 0 auto;
         padding: 20px;
@@ -19,7 +20,7 @@
         background: white;
         border-radius: 8px;
         padding: 30px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         overflow-x: hidden;
       }
       h1 {
@@ -110,7 +111,7 @@
         overflow-wrap: break-word;
       }
       .tx-hash {
-        font-family: 'Courier New', monospace;
+        font-family: "Courier New", monospace;
         font-size: 0.85em;
         word-break: break-all;
         overflow-wrap: break-word;
@@ -143,13 +144,14 @@
     <div class="container">
       <h1>Cardano Payroll System</h1>
 
-      <div id="status" class="status" style="display: none;"></div>
+      <div id="status" class="status" style="display: none"></div>
 
       <div class="run-payroll-section">
-        <h2 style="margin-top: 0; border: none;">Payroll Scheduler</h2>
+        <h2 style="margin-top: 0; border: none">Payroll Scheduler</h2>
         <button id="run-payroll-btn">Start Payroll</button>
-        <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9em;">
-          Starts automated payroll every 2 minutes (configurable via PAYROLL_INTERVAL_MS)
+        <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9em">
+          Starts automated payroll every 2 minutes (configurable via
+          PAYROLL_INTERVAL_MS)
         </p>
       </div>
 
@@ -201,17 +203,24 @@
           <tbody></tbody>
         </table>
       </div>
-      </div>
     </div>
 
-    <script src="payroll-client.js"></script>
-    <script>
-      const payrollClient = new PayrollApiClient();
+    <!-- <script src="payroll-client.js"></script> -->
+    <script type="module">
+      import {
+        getRecipients,
+        createRecipient,
+        deleteRecipient,
+        runPayroll,
+        getTransactions,
+      } from "./payroll-client.js";
+
       function updateStatus(message) {
         const statusEl = document.getElementById("status");
         statusEl.innerHTML = message;
         statusEl.style.display = message ? "block" : "none";
       }
+
       const recipientsTableBody = document.querySelector(
         "#recipients-table tbody"
       );
@@ -222,18 +231,20 @@
 
       async function loadRecipients() {
         try {
-          const recipients = await payrollClient.getRecipients();
+          const recipients = await getRecipients();
           recipientsTableBody.innerHTML = "";
           recipients.forEach((r) => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td>${r.id}</td>
-              <td><span class="address-cell" title="${r.address}">${r.address}</span></td>
-              <td>${(Number(r.amount) / 1_000_000).toFixed(6)}</td>
-              <td>
-                <button data-id="${r.id}" data-action="delete">Delete</button>
-              </td>
-            `;
+          <td>${r.id}</td>
+          <td><span class="address-cell" title="${r.address}">${
+              r.address
+            }</span></td>
+          <td>${(Number(r.amount) / 1_000_000).toFixed(6)}</td>
+          <td>
+            <button data-id="${r.id}" data-action="delete">Delete</button>
+          </td>
+        `;
             recipientsTableBody.appendChild(tr);
           });
         } catch (err) {
@@ -253,7 +264,7 @@
         }
 
         try {
-          await payrollClient.createRecipient({ address, amount });
+          await createRecipient({ address, amount });
           recipientForm.reset();
           await loadRecipients();
         } catch (err) {
@@ -269,11 +280,10 @@
         const action = btn.dataset.action;
 
         if (action === "delete") {
-          if (!confirm("Are you sure you want to delete this recipient?")) {
+          if (!confirm("Are you sure you want to delete this recipient?"))
             return;
-          }
           try {
-            await payrollClient.deleteRecipient(id);
+            await deleteRecipient(id);
             await loadRecipients();
           } catch (err) {
             console.error(err);
@@ -284,7 +294,7 @@
 
       async function loadTransactions() {
         try {
-          const transactions = await payrollClient.getTransactions();
+          const transactions = await getTransactions();
           transactionsTableBody.innerHTML = "";
           if (transactions.length === 0) {
             const tr = document.createElement("tr");
@@ -296,14 +306,18 @@
               const date = new Date(tx.created_at);
               const dateStr = date.toLocaleString();
               tr.innerHTML = `
-                <td>${transactions.length - index}</td>
-                <td>
-                  <a href="https://preprod.cardanoscan.io/transaction/${tx.tx_hash}" target="_blank" class="tx-hash" style="color: #4caf50;" title="${tx.tx_hash}">
-                    ${tx.tx_hash}
-                  </a>
-                </td>
-                <td>${dateStr}</td>
-              `;
+            <td>${transactions.length - index}</td>
+            <td>
+              <a href="https://preprod.cardanoscan.io/transaction/${
+                tx.tx_hash
+              }" target="_blank" class="tx-hash" style="color: #4caf50;" title="${
+                tx.tx_hash
+              }">
+                ${tx.tx_hash}
+              </a>
+            </td>
+            <td>${dateStr}</td>
+          `;
               transactionsTableBody.appendChild(tr);
             });
           }
@@ -318,22 +332,21 @@
         .addEventListener("click", async () => {
           try {
             updateStatus("Starting scheduler... First run in ~2 minutes.");
-            const result = await payrollClient.runPayroll();
-            updateStatus(`✅ Scheduler started (${result.intervalMs / 60000} min interval). Waiting for transactions...`);
-
+            const result = await runPayroll();
+            updateStatus(`✅ Scheduler started. Waiting for transactions...`);
             let lastSeenCount = 0;
             const pollIntervalMs = 5000;
 
             const poll = async () => {
               try {
-                const transactions = await payrollClient.getTransactions();
+                const transactions = await getTransactions();
                 if (transactions.length > lastSeenCount) {
                   lastSeenCount = transactions.length;
                   await loadTransactions();
                   const latestTx = transactions[0];
                   updateStatus(
                     `✅ Transaction completed!<br>` +
-                    `<a href="https://preprod.cardanoscan.io/transaction/${latestTx.tx_hash}" target="_blank">View on Explorer</a>`
+                      `<a href="https://preprod.cardanoscan.io/transaction/${latestTx.tx_hash}" target="_blank">View on Explorer</a>`
                   );
                 }
               } catch (err) {
@@ -354,5 +367,3 @@
     </script>
   </body>
 </html>
-
-

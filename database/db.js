@@ -1,7 +1,12 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
-const pool = new Pool();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
 async function initDb() {
   await pool.query(`
@@ -24,7 +29,6 @@ async function initDb() {
           id SERIAL PRIMARY KEY,
           address TEXT NOT NULL,
           amount BIGINT NOT NULL,
-          active BOOLEAN NOT NULL DEFAULT TRUE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       END IF;
@@ -39,10 +43,10 @@ async function initDb() {
 
   if (count === 0) {
     await pool.query(
-      `INSERT INTO payroll_recipients (address, amount, active)
+      `INSERT INTO payroll_recipients (address, amount)
        VALUES
-       ($1, $2, TRUE),
-       ($3, $4, TRUE)`,
+       ($1, $2),
+       ($3, $4)`,
       [
         "addr_test1qzgk7wvlzhznk4knyyq0tp3nj0ee82hc5maz2d2uqr4xtplyxuq6n9etd9ajlplj8ufr2jcgklgrmleajdh6zcnj8k5s9r40ue",
         1_500_000,
@@ -75,24 +79,24 @@ async function initDb() {
 
 async function getAllRecipients() {
   const { rows } = await pool.query(
-    "SELECT id, address, amount, active, created_at FROM payroll_recipients ORDER BY id ASC"
+    "SELECT id, address, amount,created_at FROM payroll_recipients ORDER BY id ASC"
   );
   return rows;
 }
 
 async function getActiveRecipients() {
   const { rows } = await pool.query(
-    "SELECT address, amount FROM payroll_recipients WHERE active = TRUE ORDER BY id ASC"
+    "SELECT address, amount FROM payroll_recipients ORDER BY id ASC"
   );
   return rows;
 }
 
 async function createRecipient({ address, amount, active = true }) {
   const { rows } = await pool.query(
-    `INSERT INTO payroll_recipients (address, amount, active)
-     VALUES ($1, $2, $3)
-     RETURNING id, address, amount, active, created_at`,
-    [address, amount, active]
+    `INSERT INTO payroll_recipients (address, amount)
+     VALUES ($1, $2)
+     RETURNING id, address, amount, created_at`,
+    [address, amount]
   );
   return rows[0];
 }
@@ -110,14 +114,10 @@ async function updateRecipient(id, { address, amount, active }) {
     fields.push(`amount = $${idx++}`);
     values.push(amount);
   }
-  if (active !== undefined) {
-    fields.push(`active = $${idx++}`);
-    values.push(active);
-  }
 
   if (!fields.length) {
     const { rows } = await pool.query(
-      "SELECT id, address, amount, active, created_at FROM payroll_recipients WHERE id = $1",
+      "SELECT id, address, amount, created_at FROM payroll_recipients WHERE id = $1",
       [id]
     );
     return rows[0] || null;
@@ -130,7 +130,7 @@ async function updateRecipient(id, { address, amount, active }) {
     UPDATE payroll_recipients
     SET ${fields.join(", ")}
     WHERE id = $${idx}
-    RETURNING id, address, amount, active, created_at
+    RETURNING id, address, amount,created_at
   `,
     values
   );
@@ -171,5 +171,3 @@ module.exports = {
   saveTransactionHash,
   getAllTransactions,
 };
-
-
