@@ -11,7 +11,7 @@ async function bootstrap() {
     const server = http.createServer(app);
     server.listen(PORT, () => {
       console.log(`🌐 Server running on http://localhost:${PORT}`);
-      console.log("⏱️ Scheduler starts after clicking 'Start Payroll' in UI");
+      console.log("⏱️ Scheduler starts after clicking");
     });
   } catch (err) {
     console.error("Failed to bootstrap application:", err);

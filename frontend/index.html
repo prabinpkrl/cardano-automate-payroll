@@ -150,7 +150,7 @@
         <h2 style="margin-top: 0; border: none">Payroll Scheduler</h2>
         <button id="run-payroll-btn">Start Payroll</button>
         <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9em">
-          Starts automated payroll every 2 minutes
+          Starts automated payroll
         </p>
       </div>
 
@@ -329,34 +329,34 @@
         .getElementById("run-payroll-btn")
         .addEventListener("click", async () => {
           try {
-            updateStatus("Starting scheduler... First run in ~2 minutes.");
+            updateStatus("Starting payroll...");
+
+            // Run payroll (this saves the transaction to the database synchronously)
             const result = await runPayroll();
             const newTxHash = result.txHash;
-            updateStatus(`Scheduler started. Waiting for transactions...`);
 
-            const initialTransactions = await getTransactions();
-            let lastSeenCount = initialTransactions.length;
-            const pollIntervalMs = 6000;
+            // Reload transactions immediately since the transaction is already saved
+            const transactions = await getTransactions();
+            await loadTransactions();
 
-            const poll = async () => {
-              try {
-                const transactions = await getTransactions();
-                if (transactions.length > lastSeenCount) {
-                  lastSeenCount = transactions.length;
-                  await loadTransactions();
-                  const latestTx = transactions[0];
-                  updateStatus(
-                    `Transaction completed!<br>` +
-                      `<a href="https://preprod.cardanoscan.io/transaction/${latestTx.tx_hash}" target="_blank">View on Explorer</a>`
-                  );
-                }
-              } catch (err) {
-                console.error("Error polling transactions:", err);
+            if (newTxHash) {
+              const newTx =
+                transactions.find((tx) => tx.tx_hash === newTxHash) ||
+                transactions[0];
+
+              if (newTx) {
+                updateStatus(
+                  `Transaction completed!<br>` +
+                    `<a href="https://preprod.cardanoscan.io/transaction/${newTx.tx_hash}" target="_blank">View on Explorer</a>`
+                );
+              } else {
+                updateStatus(
+                  `Payroll executed. Transaction hash: ${newTxHash}`
+                );
               }
-              setTimeout(poll, pollIntervalMs);
-            };
-
-            setTimeout(poll, pollIntervalMs);
+            } else {
+              updateStatus("Payroll executed successfully");
+            }
           } catch (err) {
             console.error(err);
             updateStatus("Error: " + err.message);

@@ -18,7 +18,7 @@ const API = new Blockfrost.BlockFrostAPI({
 
 async function runPayroll(payrollList) {
   try {
-    console.log("🚀 Running payroll...");
+    console.log("Running payroll...");
 
     const utxos = await API.addressesUtxos(senderAddress);
     if (!utxos.length) {

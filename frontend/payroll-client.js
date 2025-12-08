@@ -49,7 +49,6 @@ function getTransactions() {
   return request("/api/transactions");
 }
 
-// Export the functions if using modules
 export {
   getRecipients,
   createRecipient,
